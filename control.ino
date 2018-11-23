@@ -5,8 +5,6 @@
 #include <WiFiClient.h>
 #include <WiFiServer.h>
 
-
-
 //LIBRERIAS
 #include "WiFi.h"
 #include "HTTPClient.h"
@@ -33,7 +31,7 @@ DeviceAddress sensor2 = { 0x28, 0x21, 0xC5, 0xA3, 0x8, 0x0, 0x0, 0x6B };
 //variables de acumulacion
 int temp_acum_sens1[10]={1,1,1,1,1,1,1,1,1,1};
 int temp_acum_sens2[10]={1,1,1,1,1,1,1,1,1,1};
-int temp_acum_sens3[10]={1,1,1,1,1,1,1,1,1,1};
+int hum_acum_sens1[10]={1,1,1,1,1,1,1,1,1,1};
 
 //variables de entrada enchufes (numero del pin GPIO)
 int entradaplaca = 9; 
@@ -47,8 +45,37 @@ int valorbombillo = 1;
 int valorcascada = 1;
 int valoruv = 1;
 
-//el orden de las funciones importa??!!%&$
+//variables de entorno
+int actualizacion = 0;
+int value = 0;
 
+char* ssid     = "Xinita_sala";
+char* password = "perlanegra";
+
+const char* host = "google.com";
+const char* streamId   = "....................";
+const char* privateKey = "....................";
+
+
+//el orden de las funciones importa??!!%&$
+//definir cada evento de forma unitaria depende del tipo de emergencia
+void conectar_wifi(char* id, char* pass){
+    Serial.println();
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  };
+void reportar_evento_temp(){};
+void reportar_evento_hum(){};
 void leer_temp (){
   //SENSOR DE TEMPERATURA 
   Serial.print("ROBTENIENDO TEMPERATURAS...");
@@ -75,14 +102,14 @@ int analizar_temp(int sens1, int sens2){
   if(sens1 <50 && sens1 > 20 && sens2 < 50 && sens2 >20)
        { 
         int res = 0;
-        res = guardar_temp(sens1, sens2);
+        guardar_temp(sens1, sens2);
         return res;}
    else{
         //notificar emergencia
-        reportar_evento();
-        //reportar_datos(sens1, sens2);
-        //guardar_temp(sens1, sens2);
-        int res = 0; 
+        reportar_evento_temp();
+        
+        guardar_temp(sens1, sens2);
+        int res = 1;//indica parametro fuera de limites 
         return res;
       }
 }
@@ -90,8 +117,7 @@ void guardar_temp(int sens1, int sens2){
       int promedio1 = 0;
       int promedio2 = 0;
       //el valor debe ser agregado al buffer
-      for(int i=0;i<9;i++)
-      {
+      for(int i=8;i<=0;i--){
         temp_acum_sens1[i+1]=temp_acum_sens1[i];
         temp_acum_sens2[i+1]=temp_acum_sens2[i];
         promedio1=promedio1+temp_acum_sens1[i+1];
@@ -138,25 +164,46 @@ void guardar_hum(int humedad){
       //datos guardados en un buffer o enviara DB
       int promedio3 = 0;
       //el valor debe ser agregado al buffer
-      for(int i=0;i<9;i++)
-      {
-        temp_acum_sens3[i+1]=temp_acum_sens3[i];
-        promedio3=promedio3+temp_acum_sens3[i+1];
+      for(int i=8;i<=0;i--){
+          hum_acum_sens1[i+1]=temp_acum_sens1[i];
+          promedio3 = promedio3 + hum_acum_sens1[i+1];
         }
-      temp_acum_sens3[0]=humedad;
-      promedio3=promedio3+temp_acum_sens3[0];
       promedio3=(promedio3/10);
       int  resultado[2] = {promedio3, 1};
+      promedio3 = promedio3 + hum_acum_sens1[0];
       //return resultado;
   }
   
 
-void reportar_datos(){}
+int reportar_datos(){
+  //esta funcion debe enviar a API 
+  //recibir si hay o no hactualizaciones
+  //set var actualizacion segun JSON
+  actualizacion = 0;
+  if(actualizacion == 0){
+      int act =0;
+      return act;
+      }
+   else{
+      int act = 1;
+      return act;
+      }
+}
 void solicitar_datos(){}
 
-//definir cada evento de forma unitaria
-void reportar_evento(){}
-void gestionar_enchufes(){
+void actualizar_esp32(){
+      void solicitar_datos();
+      //debe traer un JSON con los datos.
+      //Asignar los nuevos valores a las variables (desde el JSON)
+      valorplaca = 1;
+      valorbombillo = 1;
+      valorcascada = 1;
+      valoruv = 1;
+      //cambiar el estado de los toma corriente
+      gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv);  
+}
+
+void gestionar_enchufes( int valorplaca, int valorbombillo, int valorcascada, int valoruv){//debe recibir el estado de los enchufes.
   
      if(valorplaca == 0 && valorbombillo == 0 && valorcascada == 0 && valoruv == 0 ){
       digitalWrite(entradaplaca, HIGH);
@@ -312,6 +359,9 @@ void setup() {
   
    pinMode(entradauv, OUTPUT);
   digitalWrite(entradauv, LOW);  
+
+  conectar_wifi( ssid, password);
+  
   /*
   Serial.println("hola ESP32");
   Serial.print("comenzaremos a conectar a wifi");
@@ -342,13 +392,35 @@ void setup() {
   }
 
 void loop() {
+      ++value;
+      
+      Serial.print("connecting to API on: ");
+      Serial.println(host);
+      delay(1000); 
+      
+      leer_temp();
+      delay(2000);
+      
+      leer_hum();       
+      delay(2000);
+      
+      //automaticamente va por los datos
+      //hay que cargarlos y cambiar de estado
+      delay(1000);
+      actualizacion = reportar_datos();
+      delay(2000);
+      if(actualizacion == 1){
+        actualizar_esp32();
+        };
+        
+      //podemos cambiar las credenciales de wifi y cargar nuevamente
+      //conectar_wifi(id, pass);
 
-leer_temp();
-       delay(2000);
-
-
-
-leer_hum();
-
-       delay(2000);
+      // Use WiFiClient class to create TCP connections
+      WiFiClient client;
+      int httpPort = 80; //el puerto debe ser el adecuado para llegar a la API
+      if (!client.connect(host, httpPort)) {
+          Serial.println("connection failed");
+          return;
+    }
 } 
