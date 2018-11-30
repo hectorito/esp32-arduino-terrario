@@ -1,4 +1,13 @@
-include <WiFi.h>
+#include <ArduinoJson.h>
+
+//#include <PackageDescriptor.h>
+//#include <Constellation.h>
+//#include <BaseDefinitions.h>
+//#include <LinkedList.h>
+//#include <BufferedPrint.h>
+
+
+#include <WiFi.h>
 #include "time.h"
 #include <b64.h>
 #include <HttpClient.h>
@@ -43,7 +52,25 @@ int entradaplaca = 9;
 int entradabombillo = 8;
 int entradacascada = 7;
 int entradauv = 6;
-
+//variables recibidas
+String line;
+char*  Sol_max       ;     
+char*   Sol_min      ;      
+char*  Temp_max      ;    
+char*  Temp_min      ;   
+char*  Humedad_min   ;
+char*  Uv_inicio     ;
+char*  Uv_tiempo     ;
+char*  Catarata_on   ;
+char*  Catarata_off  ;
+int     Uv            ;
+int     FocoTermico   ;
+int     PlacaTermica  ;
+int     Catarata      ;
+int     Auto_sol      ;
+int     Auto_terrario ;
+int     Auto_humedad  ;
+int     Auto_luz;
 // Valor de estado de los enchufes
 int valorplaca = 1;
 int valorbombillo = 1;
@@ -51,16 +78,57 @@ int valorcascada = 1;
 int valoruv = 1;
 
 //variables de entorno
-int actualizacion = 0;
+int port = 8000;
+int puerto_tcp_http =8000;
+int actualizacion = 1;
 int value = 0;
-char* ssid       = "Xinita";
+//char* ssid       = "hector";
+//char* password   = "1111222233";
+char* ssid       = "Xinita_sala";
 char* password   = "perlanegra";
-char* host = "google.com";
+char* host = "192.168.0.21";
+//char* host = "www.google.cl";
+IPAddress local_IP(192, 168, 0, 22);
+IPAddress gateway(192, 168, 0, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress primaryDNS(8, 8, 8, 8); //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
+
 char* streamId   = "....................";
 char* privateKey = "....................";
 
+
+//Funciones
 void reportar_evento_temp(){};
 void reportar_evento_hum(){};
+
+
+
+void conectar_wifi(char* id, char* pass){
+    Serial.println();
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(":");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  };
+
+void printLocalTime(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
+
 void leer_temp (){
   //SENSOR DE TEMPERATURA 
   Serial.print("ROBTENIENDO TEMPERATURAS...");
@@ -83,6 +151,7 @@ void leer_temp (){
   //return res;  
 }
 int analizar_temp(int sens1, int sens2){
+
   //Aca debe preguntar el rango en la API
   if(sens1 <50 && sens1 > 20 && sens2 < 50 && sens2 >20)
        { 
@@ -280,78 +349,110 @@ void gestionar_enchufes( int valorplaca, int valorbombillo, int valorcascada, in
       digitalWrite(entradabombillo, LOW);
       digitalWrite(entradacascada, LOW);
       digitalWrite(entradauv, LOW);
-      leer_temp ();
-      leer_hum ();
-      //if(tiempo_revision()) {
-       // reportar_datos();
-        //si en la respuesta sí hay cambios
-        //if(haycambios){
-        //  solicitar_datos();
-        //  variables toman nuevos valores;
-        //  informar si es necesario y salir
-        //}
-        //else{
-        //delay(10000); // luego ... salir...
-        //}
       }      
 }
 
-int reportar_datos(){
-  //esta funcion debe enviar a API 
-  //recibir si hay o no hactualizaciones
-  //set var actualizacion segun JSON
-  actualizacion = 0;
-  if(actualizacion == 0){
-      int act =0;
-      return act;
-      }
-   else{
-      int act = 1;
-      return act;
-      }
+char* parser_json(String json_mensaje){
+      int aux = 0 ;
+      char* jsonmensaje;
+      line.toCharArray(jsonmensaje,line.length());
+      const char* json = jsonmensaje;
+      Serial.print(jsonmensaje);
+      return jsonmensaje;
 }
-void solicitar_datos(){}
+
 
 void actualizar_esp32(){
-      void solicitar_datos();
       //debe traer un JSON con los datos.
       //Asignar los nuevos valores a las variables (desde el JSON)
-      valorplaca = 1;
-      valorbombillo = 1;
-      valorcascada = 1;
-      valoruv = 1;
+      char* mensaje = parser_json(line);
+      Serial.print("wellcome back men \n");
+      StaticJsonBuffer<100> JSONBuffer;
+      JsonObject& parsed = JSONBuffer.parseObject(mensaje); //Parse message
+ 
+      Sol_max       = parsed["sol_max"];     
+      Sol_min       = parsed["sol_min"];      
+      Temp_max      = parsed["temp_max"];    
+      Temp_min      = parsed["temp_min "];   
+      Humedad_min   = parsed["humedad_min"];
+      Uv_inicio     = parsed["uv_inicio"];
+      Uv_tiempo     = parsed["uv_tiempo"];
+      Catarata_on   = parsed["catarata_on"];
+      Catarata_off  = parsed["catarata_off"];
+      Uv            = parsed["uv"];
+      FocoTermico   = parsed["focoTermico "];
+      PlacaTermica  = parsed["placaTermica"];
+      Catarata      = parsed["catarata"];
+      Auto_sol      = parsed["auto_sol"];
+      Auto_terrario = parsed["auto_terrario"];
+      Auto_humedad  = parsed["auto_humedad"];
+      Auto_luz      = parsed["auto_luz"];
+    
       //cambiar el estado de los toma corriente
-      gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv);  
+      gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv); 
+      actualizacion = 0;
+       
 }
 
-void printLocalTime(){
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-}
-
-
-void conectar_wifi(char* id, char* pass){
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-    WiFi.begin(ssid, password);
+int obtener_datos(int port){
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(":");
+      delay(500);
+      Serial.print(".");
     }
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  };
+    Serial.print("Subnet Mask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("Gateway IP: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("DNS: ");
+    Serial.println(WiFi.dnsIP());
 
-void conectar_tcp(){}
+    WiFiClient client;
+    int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
+    //Serial.print(client.connect("google.com",80));
+    if (!client.connect(host, httpPort)) {
+        Serial.println("connection failed on HTTPPort");
+        return 0;
+      }
+      
+      String url = "http://192.168.0.21:8000/esp/1";
+    //  url += streamId;
+    //  url += "?private_key=";
+    //  url += privateKey;
+    //  url += "&value=";
+    //  url += value;
+  
+      Serial.print("Requesting URL: ");
+      Serial.println(url);
 
+      // This will send the request to the server
+      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                   "Host: " + host + "\r\n" +
+                   "Connection: open\r\n\r\n");
+      unsigned long timeout = millis();
+      while (client.available() == 0) {
+          if (millis() - timeout > 5000) {
+              Serial.println(">>> Client Timeout !");
+              client.stop();
+              return 0;
+          }
+      }
+
+      // Read all the lines of the reply from server and print them to Serial
+      while(client.available()) {
+          line = client.readStringUntil('\r');
+          Serial.print(line);
+          actualizacion = 1;
+          //Aqui asignar los valores que vienen en el json a las variables globales
+
+          };
+      
+  
+      Serial.println();
+      Serial.println("closing connection");
+      
+  }
+
+//este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
 void setup(){
   Serial.begin(115200);
   sensors.begin();
@@ -372,8 +473,8 @@ void setup(){
   printLocalTime();
 
   //disconnect WiFi as it's no longer needed
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
+  //WiFi.disconnect(true);
+  //WiFi.mode(WIFI_OFF);
 
   //Cada relay debe ser NC estado inicial low
   //
@@ -390,14 +491,12 @@ void setup(){
    //digitalWrite(entradauv, LOW);  
 }
 
-void loop()
-{
-  delay(36000);
-  printLocalTime();
-
-  ++value;
+void loop(){
+  
+      printLocalTime();
+    
+      ++value;
       
-
       delay(1000); 
       
       leer_temp();
@@ -405,64 +504,28 @@ void loop()
       
       leer_hum();       
       delay(2000);
-      
-      //automaticamente va por los datos
-      //hay que cargarlos y cambiar de estado
-      delay(1000);
 
       Serial.print("connecting to API on: ");
       Serial.println(host);
+
+
+      //Adicionar funcion de control de tiempo
+
+      //revisar si hay que actualizar estado
+       actualizacion = obtener_datos(puerto_tcp_http);
+       delay(2000);
+
+//      obtener_todo();
+
       
-      //podemos cambiar las credenciales de wifi y cargar nuevamente la coneccion
-      //conectar_wifi(id, pass);
-      actualizacion = reportar_datos();
-      delay(2000);
-      if(actualizacion == 1){
+      if(actualizacion == 0){
+        //NO actualizar;
+        Serial.print(" vale cero --> conservar estado");
+        };
+      if(actualizacion != 0){
+        Serial.println("Cambiar estado de enchufes");
         actualizar_esp32();
         };
 
-      // Use WiFiClient class to create TCP connections
-      WiFiClient client;
-      //se puede crear n veces..   declarar global (VER)
-      int httpPort = 80; //el puerto debe ser el adecuado para llegar a la API     creo 8080
-      if (!client.connect(host, httpPort)) {
-          Serial.println("connection failed");
-          return;
-      }
-
-//si pasa es que conecto a la API por TCP
-
-      
-      // We now create a URI for the request
-      String url = "/input/";
-      url += streamId;
-      url += "?private_key=";
-      url += privateKey;
-      url += "&value=";
-      url += value;
-  
-      Serial.print("Requesting URL: ");
-      Serial.println(url);
-
-      // This will send the request to the server
-      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                   "Host: " + host + "\r\n" +
-                   "Connection: close\r\n\r\n");
-      unsigned long timeout = millis();
-      while (client.available() == 0) {
-          if (millis() - timeout > 5000) {
-              Serial.println(">>> Client Timeout !");
-              client.stop();
-              return;
-          }
-      }
-
-      // Read all the lines of the reply from server and print them to Serial
-      while(client.available()) {
-          String line = client.readStringUntil('\r');
-          Serial.print(line);
-      }
-  
-      Serial.println();
-      Serial.println("closing connection");
+    
 }
