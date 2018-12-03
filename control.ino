@@ -46,7 +46,7 @@ int entradabombillo = 8;
 int entradacascada = 7;
 int entradauv = 6;
 //variables recibidas
-String line;
+String  line          ;
 String  Sol_max       ;     
 String  Sol_min       ;      
 String  Temp_max      ;    
@@ -64,6 +64,14 @@ int     Auto_sol      ;
 int     Auto_terrario ;
 int     Auto_humedad  ;
 int     Auto_luz;
+//variables para enviar se debe de agregar los valores segun estado:
+String  Esp_sol   =   "hola" ;
+String  Esp_terrario  = "mundo";
+String  Esp_humedad  =  "holis";
+String  Esp_placatermica= "mundis";
+String  Esp_focotermico= "holita";
+String  Esp_catarata   = "mundita"; 
+String  Esp_uv      = "holamundo"   ;
 // Valor de estado de los enchufes
 int valorplaca = 1;
 int valorbombillo = 1;
@@ -77,15 +85,10 @@ int actualizacion = 1;
 int value = 0;
 //char* ssid       = "hector";
 //char* password   = "1111222233";
-char* ssid       = "Xinita";
+char* ssid       = "Xinita_sala";
 char* password   = "perlanegra";
 char* host = "192.168.0.16";
 //char* host = "www.google.cl";
-IPAddress local_IP(192, 168, 0, 22);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress primaryDNS(8, 8, 8, 8); //optional
-IPAddress secondaryDNS(8, 8, 4, 4); //optional
 
 char* streamId   = "....................";
 char* privateKey = "....................";
@@ -100,6 +103,11 @@ void reportar_evento_hum(){};
 void conectar_wifi(char* id, char* pass){
     Serial.println();
     Serial.println();
+    IPAddress local_IP(192, 168, 0, 22);
+    IPAddress gateway(192, 168, 0, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    IPAddress primaryDNS(8, 8, 8, 8); //optional
+    IPAddress secondaryDNS(8, 8, 4, 4); //optional
     Serial.print("Connecting to ");
     Serial.println(ssid);
     WiFi.begin(ssid, password);
@@ -344,7 +352,56 @@ void gestionar_enchufes( int valorplaca, int valorbombillo, int valorcascada, in
       digitalWrite(entradauv, LOW);
       }      
 }
+int obtener_datos(int port){
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.print("Subnet Mask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("Gateway IP: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("DNS: ");
+    Serial.println(WiFi.dnsIP());
 
+    WiFiClient client;
+    //int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
+    //Serial.print(client.connect("google.com",80));
+    if (!client.connect(host, port)) {
+        Serial.println("connection failed on HTTPPort");
+        return 0;
+      }
+      
+      String url = "http://192.168.0.16:8000/esp/1";
+  
+      Serial.print("Requesting URL: ");
+      Serial.println(url);
+
+      // This will send the request to the server
+      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                   "Host: " + host + "\r\n" +
+                   "Connection: open\r\n\r\n");
+      unsigned long timeout = millis();
+      while (client.available() == 0) {
+          if (millis() - timeout > 5000) {
+              Serial.println(">>> Client Timeout !");
+              client.stop();
+              return 0;
+          }
+      }
+
+      // Read all the lines of the reply from server and print them to Serial
+      while(client.available()) {
+          line = client.readStringUntil('\r');
+          Serial.print(line);
+          actualizacion = 1;
+          //Aqui asignar los valores que vienen en el json a las variables globales
+
+          };
+      Serial.println();
+      Serial.println("closing connection");
+      
+  }
 
 void actualizar_esp32(){
      
@@ -400,60 +457,9 @@ void actualizar_esp32(){
        
 }     
 
-int obtener_datos(int port){
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-    Serial.print("Subnet Mask: ");
-    Serial.println(WiFi.subnetMask());
-    Serial.print("Gateway IP: ");
-    Serial.println(WiFi.gatewayIP());
-    Serial.print("DNS: ");
-    Serial.println(WiFi.dnsIP());
 
-    WiFiClient client;
-    //int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
-    //Serial.print(client.connect("google.com",80));
-    if (!client.connect(host, port)) {
-        Serial.println("connection failed on HTTPPort");
-        return 0;
-      }
-      
-      String url = "http://192.168.0.16:8000/esp/1";
-  
-      Serial.print("Requesting URL: ");
-      Serial.println(url);
+int reportar_datos(){
 
-      // This will send the request to the server
-      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                   "Host: " + host + "\r\n" +
-                   "Connection: open\r\n\r\n");
-      unsigned long timeout = millis();
-      while (client.available() == 0) {
-          if (millis() - timeout > 5000) {
-              Serial.println(">>> Client Timeout !");
-              client.stop();
-              return 0;
-          }
-      }
-
-      // Read all the lines of the reply from server and print them to Serial
-      while(client.available()) {
-          line = client.readStringUntil('\r');
-          Serial.print(line);
-          actualizacion = 1;
-          //Aqui asignar los valores que vienen en el json a las variables globales
-
-          };
-      Serial.println();
-      Serial.println("closing connection");
-      
-  }
-
-void reportar_datos(){
-        //aca Post a la API
-        Serial.print("Inicio envio reportes: \n");
         while (WiFi.status() != WL_CONNECTED) {
               delay(500);
               Serial.print(".");
@@ -464,42 +470,50 @@ void reportar_datos(){
         Serial.println(WiFi.gatewayIP());
         Serial.print("DNS: ");
         Serial.println(WiFi.dnsIP());
-        WiFiClient wifi;
-        char host2[] = "http://192.168.0.16:8000/alarma/1";
-        HttpClient client = HttpClient(wifi, "http://192.168.0.16:8000/alarma/1", port);
-        int status = WL_IDLE_STATUS;
-        String response;
-        int statusCode = 0;
-        Serial.println("making POST request");
-        String contentType = "application/json";
         
-        String postData = "{\"sol_max\":\"40\",\"sol_min\":\"20\",\"temp_max\":\"30\",\"temp_min\":\"20\",\"humedad_min\":\"35\",\"uv_inicio\":\"8\",\"uv_tiempo\":\"22\",\"catarata_on\":\"1\",\"catarata_off\":\"3\",\"uv\":\"1\",\"focotermico\":\"1\",\"placatermica\":\"0\",\"catarata\":\"0\",\"auto_sol\":\"1\",\"auto_terrario\":\"1\",\"auto_humedad\":\"1\",\"auto_luz\":\"1\"}";
-        //String postData = "{\"name\":\"Alice\",\"age\":\"12\"}";
-        
-        //String dataStr = ""; 
-        //serializeJson(postData, dataStr);
-        client.post("http://192.168.0.16:8000/alarma/1", contentType, postData);
-        
-        // read the status code and body of the response
-/*
-  httpClient.beginRequest();
-  httpClient.post(path);
-  httpClient.sendHeader("Content-Type", "application/json");
-  httpClient.sendHeader("Content-Length", dataStr.length());
-  httpClient.sendHeader("Authorization", "Bearer " + String(device_secret_key));
-  httpClient.beginBody(); 
-  httpClient.print(dataStr); 
-  httpClient.endRequest();
-*/
-        statusCode = client.responseStatusCode();
-        Serial.print("status code :  ");  Serial.println(statusCode); Serial.print( "\n \n \n");
-        response = client.responseBody();
-        Serial.print("hello wolrd");
-        Serial.print("Status code: ");
-        Serial.println(statusCode);
-        Serial.print("Response: ");
-        Serial.println(response);
-}
+        WiFiClient client;  
+
+        if (!client.connect(host, port)) {
+          Serial.println("connection failed on HTTPPort");
+          return 0;
+        }
+        String url = "http://192.168.0.16:8000/alarma/1";
+  
+        Serial.print("Requesting URL: ");
+        Serial.println(url);
+        // This will send the POST request to the server
+        client.print(String("POST ") + url + " HTTP/1.1\r\n" +
+                       "Host: " + host + "\r\n" +
+                       "Connection: open\r\n\r\n");
+        client.print( String("esp_sol:")          + Esp_sol      +
+                      String("esp_terrario:")     + Esp_terrario +
+                      String("esp_humedad:")      + Esp_humedad  +
+                      String("esp_placatermica:") + Esp_placatermica +
+                      String("esp_focotermico:")  + Esp_focotermico  +
+                      String("esp_catarata:")     + Esp_catarata  +
+                      String("esp_uv:")           + Esp_uv );
+                      
+          unsigned long timeout = millis();
+          while (client.available() == 0) {
+              if (millis() - timeout > 5000) {
+                  Serial.println(">>> Client Timeout !");
+                  client.stop();
+                  return 0;
+              }
+          }
+          String response;
+            // Read all the lines of the reply from server and print them to Serial
+          while(client.available()) {
+              response = client.readStringUntil('\r');
+              Serial.print(response);
+              //Aqui asignar los valores que vienen en el json a las variables globales
+              }; 
+            Serial.print(" \n");
+            Serial.print("Api disponible: \n");
+            Serial.println(" esta respuesta pertenece al POST \n  \n");
+            return 1;
+  };
+
 
 void setup(){
   Serial.begin(115200);
@@ -538,7 +552,7 @@ void setup(){
    //pinMode(entradauv, OUTPUT);
    //digitalWrite(entradauv, LOW);  
 }
-
+ 
 void loop(){
   
      // printLocalTime();
@@ -568,6 +582,8 @@ void loop(){
         };
          //este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
         // ESP.restart();
-        reportar_datos();
-  
+        int reportado = reportar_datos();
+        Serial.print(" Los valores se han enviado (0=no, 10=si) : " );
+        Serial.print(reportado);
+        Serial.print(" \n \n");
 }
