@@ -1,12 +1,5 @@
 #include <ArduinoJson.h>
-
-//#include <PackageDescriptor.h>
-//#include <Constellation.h>
-//#include <BaseDefinitions.h>
-//#include <LinkedList.h>
-//#include <BufferedPrint.h>
-
-
+#include <ArduinoHttpClient.h>
 #include <WiFi.h>
 #include "time.h"
 #include <b64.h>
@@ -54,15 +47,15 @@ int entradacascada = 7;
 int entradauv = 6;
 //variables recibidas
 String line;
-char*  Sol_max       ;     
-char*   Sol_min      ;      
-char*  Temp_max      ;    
-char*  Temp_min      ;   
-char*  Humedad_min   ;
-char*  Uv_inicio     ;
-char*  Uv_tiempo     ;
-char*  Catarata_on   ;
-char*  Catarata_off  ;
+String  Sol_max       ;     
+String  Sol_min       ;      
+String  Temp_max      ;    
+String  Temp_min      ;   
+String  Humedad_min   ;
+String  Uv_inicio     ;
+String  Uv_tiempo     ;
+String  Catarata_on   ;
+String  Catarata_off  ;
 int     Uv            ;
 int     FocoTermico   ;
 int     PlacaTermica  ;
@@ -84,9 +77,9 @@ int actualizacion = 1;
 int value = 0;
 //char* ssid       = "hector";
 //char* password   = "1111222233";
-char* ssid       = "Xinita_sala";
+char* ssid       = "Xinita";
 char* password   = "perlanegra";
-char* host = "192.168.0.21";
+char* host = "192.168.0.16";
 //char* host = "www.google.cl";
 IPAddress local_IP(192, 168, 0, 22);
 IPAddress gateway(192, 168, 0, 1);
@@ -352,47 +345,60 @@ void gestionar_enchufes( int valorplaca, int valorbombillo, int valorcascada, in
       }      
 }
 
-char* parser_json(String json_mensaje){
-      int aux = 0 ;
-      char* jsonmensaje;
-      line.toCharArray(jsonmensaje,line.length());
-      const char* json = jsonmensaje;
-      Serial.print(jsonmensaje);
-      return jsonmensaje;
-}
-
 
 void actualizar_esp32(){
-      //debe traer un JSON con los datos.
-      //Asignar los nuevos valores a las variables (desde el JSON)
-      char* mensaje = parser_json(line);
-      Serial.print("wellcome back men \n");
-      StaticJsonBuffer<100> JSONBuffer;
-      JsonObject& parsed = JSONBuffer.parseObject(mensaje); //Parse message
- 
-      Sol_max       = parsed["sol_max"];     
-      Sol_min       = parsed["sol_min"];      
-      Temp_max      = parsed["temp_max"];    
-      Temp_min      = parsed["temp_min "];   
-      Humedad_min   = parsed["humedad_min"];
-      Uv_inicio     = parsed["uv_inicio"];
-      Uv_tiempo     = parsed["uv_tiempo"];
-      Catarata_on   = parsed["catarata_on"];
-      Catarata_off  = parsed["catarata_off"];
-      Uv            = parsed["uv"];
-      FocoTermico   = parsed["focoTermico "];
-      PlacaTermica  = parsed["placaTermica"];
-      Catarata      = parsed["catarata"];
-      Auto_sol      = parsed["auto_sol"];
-      Auto_terrario = parsed["auto_terrario"];
-      Auto_humedad  = parsed["auto_humedad"];
-      Auto_luz      = parsed["auto_luz"];
-    
+     
+      String jsonmensaje;
+      int i_line =1;
+      int i_json =0;
+      while(i_line < line.length()){
+            if(line[i_line] == '"'){
+                  jsonmensaje+=(char)92;
+                  i_json++;
+                  jsonmensaje+= line[i_line];
+                  i_json++;
+            }else{
+                  jsonmensaje+= line[i_line];
+                  i_json++;
+                  //Serial.println(jsonmensaje[i_json]);
+            }
+            i_line++;
+      }
+      Serial.println(jsonmensaje);
+      String jsonmensaje2 = "{\"sol_max\":\"40\",\"sol_min\":\"20\",\"temp_max\":\"30\",\"temp_min\":\"20\",\"humedad_min\":\"35\",\"uv_inicio\":\"8\",\"uv_tiempo\":\"22\",\"catarata_on\":\"1\",\"catarata_off\":\"3\",\"uv\":\"1\",\"focotermico\":\"1\",\"placatermica\":\"0\",\"catarata\":\"0\",\"auto_sol\":\"1\",\"auto_terrario\":\"1\",\"auto_humedad\":\"1\",\"auto_luz\":\"1\"}";
+      Serial.print(jsonmensaje2);
+      DynamicJsonBuffer jsonBuffer;
+      JsonObject& parsed = jsonBuffer.parseObject(jsonmensaje2); //Parse message
+      if(!parsed.success()){
+          Serial.print("parseObject() failed");
+      }else{
+      Sol_max       = parsed["sol_max"].as<String>();      
+      Sol_min       = parsed["sol_min"].as<String>();      
+      Temp_max      = parsed["temp_max"].as<String>();    
+      Temp_min      = parsed["temp_min "].as<String>();   
+      Humedad_min   = parsed["humedad_min"].as<String>();
+      Uv_inicio     = parsed["uv_inicio"].as<String>();
+      Uv_tiempo     = parsed["uv_tiempo"].as<String>();
+      Catarata_on   = parsed["catarata_on"].as<String>();
+      Catarata_off  = parsed["catarata_off"].as<String>();
+      Uv            = parsed["uv"].as<int>();
+      FocoTermico   = parsed["focoTermico "].as<int>();
+      PlacaTermica  = parsed["placaTermica"].as<int>();
+      Catarata      = parsed["catarata"].as<int>();
+      Auto_sol      = parsed["auto_sol"].as<int>();
+      Auto_terrario = parsed["auto_terrario"].as<int>();
+      Auto_humedad  = parsed["auto_humedad"].as<int>();
+      Auto_luz      = parsed["auto_luz"].as<int>();
+      Serial.print("all variables set parsed \n");
+      }
+      Serial.print("el valor para ver si es automatico o no de Auto_luz es : ");
+      Serial.print(Auto_luz);
+      Serial.print("  \n   \n   \n");
       //cambiar el estado de los toma corriente
       gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv); 
       actualizacion = 0;
        
-}
+}     
 
 int obtener_datos(int port){
     while (WiFi.status() != WL_CONNECTED) {
@@ -407,19 +413,14 @@ int obtener_datos(int port){
     Serial.println(WiFi.dnsIP());
 
     WiFiClient client;
-    int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
+    //int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
     //Serial.print(client.connect("google.com",80));
-    if (!client.connect(host, httpPort)) {
+    if (!client.connect(host, port)) {
         Serial.println("connection failed on HTTPPort");
         return 0;
       }
       
-      String url = "http://192.168.0.21:8000/esp/1";
-    //  url += streamId;
-    //  url += "?private_key=";
-    //  url += privateKey;
-    //  url += "&value=";
-    //  url += value;
+      String url = "http://192.168.0.16:8000/esp/1";
   
       Serial.print("Requesting URL: ");
       Serial.println(url);
@@ -445,14 +446,61 @@ int obtener_datos(int port){
           //Aqui asignar los valores que vienen en el json a las variables globales
 
           };
-      
-  
       Serial.println();
       Serial.println("closing connection");
       
   }
 
-//este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
+void reportar_datos(){
+        //aca Post a la API
+        Serial.print("Inicio envio reportes: \n");
+        while (WiFi.status() != WL_CONNECTED) {
+              delay(500);
+              Serial.print(".");
+        }
+        Serial.print("Subnet Mask: ");
+        Serial.println(WiFi.subnetMask());
+        Serial.print("Gateway IP: ");
+        Serial.println(WiFi.gatewayIP());
+        Serial.print("DNS: ");
+        Serial.println(WiFi.dnsIP());
+        WiFiClient wifi;
+        char host2[] = "http://192.168.0.16:8000/alarma/1";
+        HttpClient client = HttpClient(wifi, "http://192.168.0.16:8000/alarma/1", port);
+        int status = WL_IDLE_STATUS;
+        String response;
+        int statusCode = 0;
+        Serial.println("making POST request");
+        String contentType = "application/json";
+        
+        String postData = "{\"sol_max\":\"40\",\"sol_min\":\"20\",\"temp_max\":\"30\",\"temp_min\":\"20\",\"humedad_min\":\"35\",\"uv_inicio\":\"8\",\"uv_tiempo\":\"22\",\"catarata_on\":\"1\",\"catarata_off\":\"3\",\"uv\":\"1\",\"focotermico\":\"1\",\"placatermica\":\"0\",\"catarata\":\"0\",\"auto_sol\":\"1\",\"auto_terrario\":\"1\",\"auto_humedad\":\"1\",\"auto_luz\":\"1\"}";
+        //String postData = "{\"name\":\"Alice\",\"age\":\"12\"}";
+        
+        //String dataStr = ""; 
+        //serializeJson(postData, dataStr);
+        client.post("http://192.168.0.16:8000/alarma/1", contentType, postData);
+        
+        // read the status code and body of the response
+/*
+  httpClient.beginRequest();
+  httpClient.post(path);
+  httpClient.sendHeader("Content-Type", "application/json");
+  httpClient.sendHeader("Content-Length", dataStr.length());
+  httpClient.sendHeader("Authorization", "Bearer " + String(device_secret_key));
+  httpClient.beginBody(); 
+  httpClient.print(dataStr); 
+  httpClient.endRequest();
+*/
+        statusCode = client.responseStatusCode();
+        Serial.print("status code :  ");  Serial.println(statusCode); Serial.print( "\n \n \n");
+        response = client.responseBody();
+        Serial.print("hello wolrd");
+        Serial.print("Status code: ");
+        Serial.println(statusCode);
+        Serial.print("Response: ");
+        Serial.println(response);
+}
+
 void setup(){
   Serial.begin(115200);
   sensors.begin();
@@ -493,31 +541,23 @@ void setup(){
 
 void loop(){
   
-      printLocalTime();
+     // printLocalTime();
     
       ++value;
       
-      delay(1000); 
+     // delay(1000); 
       
-      leer_temp();
+     // leer_temp();
       delay(2000);
       
-      leer_hum();       
+     // leer_hum();       
       delay(2000);
 
       Serial.print("connecting to API on: ");
       Serial.println(host);
-
-
-      //Adicionar funcion de control de tiempo
-
-      //revisar si hay que actualizar estado
        actualizacion = obtener_datos(puerto_tcp_http);
        delay(2000);
-
-//      obtener_todo();
-
-      
+   
       if(actualizacion == 0){
         //NO actualizar;
         Serial.print(" vale cero --> conservar estado");
@@ -526,6 +566,8 @@ void loop(){
         Serial.println("Cambiar estado de enchufes");
         actualizar_esp32();
         };
-
-    
+         //este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
+        // ESP.restart();
+        reportar_datos();
+  
 }
