@@ -663,8 +663,6 @@ void loop(){
               Serial.print("Actualizar ESP32 (paso2 ).   \n \n");
               actualizar_esp32();
               };
-
-
         Serial.print("Iniciando a reportar datos desde la ESP·\n   (paso 3) \n");     
         int reportado = reportar_datos();
         Serial.print(" Los valores se han enviado (0=no, 10=si) : " );
