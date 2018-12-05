@@ -13,7 +13,8 @@
 #include <OneWire.h>
 #include "DallasTemperature.h"
 #include "DHT.h"
-
+#include "Arduino.h"
+#include "Client.h"
 
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;
@@ -72,6 +73,9 @@ String  Esp_placatermica= "mundis";
 String  Esp_focotermico= "holita";
 String  Esp_catarata   = "mundita"; 
 String  Esp_uv      = "holamundo"   ;
+String  Id_cliente ="";
+String  Hora       ="";
+String  Razon      ="";
 // Valor de estado de los enchufes
 int valorplaca = 1;
 int valorbombillo = 1;
@@ -95,11 +99,6 @@ char* privateKey = "....................";
 
 
 //Funciones
-void reportar_evento_temp(){};
-void reportar_evento_hum(){};
-
-
-
 void conectar_wifi(char* id, char* pass){
     Serial.println();
     Serial.println();
@@ -108,7 +107,6 @@ void conectar_wifi(char* id, char* pass){
     IPAddress subnet(255, 255, 255, 0);
     IPAddress primaryDNS(8, 8, 8, 8); //optional
     IPAddress secondaryDNS(8, 8, 4, 4); //optional
-    Serial.print("Connecting to ");
     Serial.println(ssid);
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
@@ -132,22 +130,25 @@ void printLocalTime(){
 
 void leer_temp (){
   //SENSOR DE TEMPERATURA 
-  Serial.print("ROBTENIENDO TEMPERATURAS...");
+  Serial.print("Obteniendo Temperaturas.  \n");
   sensors.requestTemperatures();
-  Serial.println("DONE");
-  
+  Serial.println(".....DONE");
   Serial.print("Sensor 1(*C): ");
   Serial.print(sensors.getTempC(sensor1)); 
   Serial.print('\n');
   Serial.print("Sensor 2(*C): ");
   Serial.print(sensors.getTempC(sensor2)); 
-  Serial.print('\n');
+  Serial.print("\n \n");
   //variables de prueba analisis de sensores
   //int res[3] = {0, 0, 0}; //{prom1, prom2, bool}
   int res = 0;
   int sens1 = 11; 
   int sens2 = 22; 
   res = analizar_temp(sens1, sens2);
+  if(res == 1){
+    Serial.print(" Valor señala anomalia=1, normal=0    es : ");
+    Serial.print(res); Serial.print(" \n \n");
+  }
   //analiza res 1 = ok;
   //return res;  
 }
@@ -161,11 +162,19 @@ int analizar_temp(int sens1, int sens2){
         return res;}
    else{
         //notificar emergencia
-        reportar_evento_temp();
-        
-        guardar_temp(sens1, sens2);
-        int res = 1;//indica parametro fuera de limites 
-        return res;
+        Id_cliente ="1";
+        Hora       ="00:00:00";
+        Razon      ="Temperatura fuera de rango";   
+            
+        int res = alarma_sensores();
+        if(res == 1){
+            Id_cliente ="";
+            Hora       ="";
+            Razon      ="";
+            Serial.print("Alarma Temperatura Enviada. \n");
+            guardar_temp(sens1, sens2);
+            return res;
+        } 
       }
 }
 void guardar_temp(int sens1, int sens2){
@@ -187,33 +196,58 @@ void guardar_temp(int sens1, int sens2){
       int  resultado[2] = { promedio1, promedio2 };
       //return resultado;
     }
-
 void leer_hum (){
    //SENSOR DE HUMEDAD
-  Serial.print("SENSOR DE HUMEDAD Y TEMPERATURA");
+  Serial.print("Obteniendo Humedad medida. \n");
   float h = dht.readHumidity();
   float t = dht.readTemperature();
-
+  int aux = (int)h;
+  int aux2 = (int)t;
   Serial.print("Humidity: ");
-  Serial.print(h);
+  Serial.print(aux);
   Serial.print(" %\t Temperature: ");
-  Serial.print(t);
+  Serial.print(aux2);
   Serial.print('\n');
   //variables de prueba analisis de sensor humedad
-  //int res = 0; int hum_min = 11; int hum_max = 77; int humedad = 70;
-  //res = analizar_hum (hum_min, hum_max, humedad);
-  //analiza return 1 = ok;
+  int res = 0; int hum_min = 11; int hum_max = 77; 
+  //int humedad = (int)h;
+  int humedad = 88;
+  res = analizar_hum(hum_min, hum_max, humedad);
+  if(res == 1){
+    Serial.print(" Valor señal.   anomalia=1, normal=0 :  ");
+    Serial.print(res); 
+    Serial.print(" \n");
+    Serial.print("Configurar para ver \n");
+  }
+  //return res;
 }
 int analizar_hum(int hum_min, int hum_max, int humedad){
   //Aca debe comparar rango
+  int res = 0;
   if(hum_min <= humedad && hum_max >= humedad)
-  { guardar_hum(humedad); int res = 1; return res;}
-  else{ 
-  //notificar emergencia
-  //reportar_datos(humedad);
-  int guardado[2] = {0, 0}; // {promedio, bool}
-  guardar_hum(humedad);
-  int res = 0; return res;}
+  { guardar_hum(humedad); 
+    return res;
+    }else{ 
+     //notificar emergencia
+        Id_cliente ="1";
+        Hora       ="12:12:12";
+        Razon      ="Humedad fuera de rango";   
+            
+        int res = alarma_sensores();
+        if(res == 1){
+            Id_cliente ="";
+            Hora       ="";
+            Razon      ="";
+            Serial.print("Alarma Humedad Enviada. \n");
+            guardar_hum(humedad);
+            return res;
+            //notificar emergencia
+            //reportar_datos(humedad);
+            }else{
+              Serial.print("no se reporto algo fallo");
+              return res;
+            }
+}
 }
 void guardar_hum(int humedad){
       //datos guardados en un buffer o enviara DB
@@ -223,6 +257,8 @@ void guardar_hum(int humedad){
           hum_acum_sens1[i+1]=temp_acum_sens1[i];
           promedio3 = promedio3 + hum_acum_sens1[i+1];
         }
+       hum_acum_sens1[0]=humedad;
+       promedio3+=humedad;
       promedio3=(promedio3/10);
       int  resultado[2] = {promedio3, 1};
       promedio3 = promedio3 + hum_acum_sens1[0];
@@ -352,11 +388,12 @@ void gestionar_enchufes( int valorplaca, int valorbombillo, int valorcascada, in
       digitalWrite(entradauv, LOW);
       }      
 }
-int obtener_datos(int port){
+int obtener_datos(){
     while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
+          delay(500);
+          Serial.print(".");
+          return 1;
+        }
     Serial.print("Subnet Mask: ");
     Serial.println(WiFi.subnetMask());
     Serial.print("Gateway IP: ");
@@ -365,15 +402,11 @@ int obtener_datos(int port){
     Serial.println(WiFi.dnsIP());
 
     WiFiClient client;
-    //int httpPort = port; //el puerto debe ser el adecuado para llegar a la API     creo 8080
-    //Serial.print(client.connect("google.com",80));
     if (!client.connect(host, port)) {
         Serial.println("connection failed on HTTPPort");
         return 0;
       }
-      
       String url = "http://192.168.0.16:8000/esp/1";
-  
       Serial.print("Requesting URL: ");
       Serial.println(url);
 
@@ -389,75 +422,61 @@ int obtener_datos(int port){
               return 0;
           }
       }
-
       // Read all the lines of the reply from server and print them to Serial
       while(client.available()) {
           line = client.readStringUntil('\r');
-          Serial.print(line);
-          actualizacion = 1;
-          //Aqui asignar los valores que vienen en el json a las variables globales
-
+          //Serial.print(line);
           };
       Serial.println();
-      Serial.println("closing connection");
-      
+      Serial.println("Datos recibidos: " + line + "\n");
+      return 1;
   }
+int alarma_sensores(){
+        Serial.print("Reportando anomalia en temperarura o humedad.  \n");
+        while (WiFi.status() != WL_CONNECTED) {
+              delay(500);
+              Serial.print(".");
+        }
+        Serial.print("DNS: ");
+        Serial.println(WiFi.dnsIP());
+        
+        WiFiClient client;  
 
-void actualizar_esp32(){
-     
-      String jsonmensaje;
-      int i_line =1;
-      int i_json =0;
-      while(i_line < line.length()){
-            if(line[i_line] == '"'){
-                  jsonmensaje+=(char)92;
-                  i_json++;
-                  jsonmensaje+= line[i_line];
-                  i_json++;
-            }else{
-                  jsonmensaje+= line[i_line];
-                  i_json++;
-                  //Serial.println(jsonmensaje[i_json]);
-            }
-            i_line++;
-      }
-      Serial.println(jsonmensaje);
-      String jsonmensaje2 = "{\"sol_max\":\"40\",\"sol_min\":\"20\",\"temp_max\":\"30\",\"temp_min\":\"20\",\"humedad_min\":\"35\",\"uv_inicio\":\"8\",\"uv_tiempo\":\"22\",\"catarata_on\":\"1\",\"catarata_off\":\"3\",\"uv\":\"1\",\"focotermico\":\"1\",\"placatermica\":\"0\",\"catarata\":\"0\",\"auto_sol\":\"1\",\"auto_terrario\":\"1\",\"auto_humedad\":\"1\",\"auto_luz\":\"1\"}";
-      Serial.print(jsonmensaje2);
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& parsed = jsonBuffer.parseObject(jsonmensaje2); //Parse message
-      if(!parsed.success()){
-          Serial.print("parseObject() failed");
-      }else{
-      Sol_max       = parsed["sol_max"].as<String>();      
-      Sol_min       = parsed["sol_min"].as<String>();      
-      Temp_max      = parsed["temp_max"].as<String>();    
-      Temp_min      = parsed["temp_min "].as<String>();   
-      Humedad_min   = parsed["humedad_min"].as<String>();
-      Uv_inicio     = parsed["uv_inicio"].as<String>();
-      Uv_tiempo     = parsed["uv_tiempo"].as<String>();
-      Catarata_on   = parsed["catarata_on"].as<String>();
-      Catarata_off  = parsed["catarata_off"].as<String>();
-      Uv            = parsed["uv"].as<int>();
-      FocoTermico   = parsed["focoTermico "].as<int>();
-      PlacaTermica  = parsed["placaTermica"].as<int>();
-      Catarata      = parsed["catarata"].as<int>();
-      Auto_sol      = parsed["auto_sol"].as<int>();
-      Auto_terrario = parsed["auto_terrario"].as<int>();
-      Auto_humedad  = parsed["auto_humedad"].as<int>();
-      Auto_luz      = parsed["auto_luz"].as<int>();
-      Serial.print("all variables set parsed \n");
-      }
-      Serial.print("el valor para ver si es automatico o no de Auto_luz es : ");
-      Serial.print(Auto_luz);
-      Serial.print("  \n   \n   \n");
-      //cambiar el estado de los toma corriente
-      gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv); 
-      actualizacion = 0;
-       
-}     
-
-
+        if (!client.connect(host, port)) {
+          Serial.println("connection failed on WiFiClient ");
+          return 0;
+        }
+        String url = "http://192.168.0.16:8000/alarma/1";
+  
+        Serial.print("Requesting URL: ");
+        Serial.println(url);
+        // This will send the POST request to the server
+        client.print(String("POST ") + url + " HTTP/1.1\r\n" +
+                     "Host: " + host + "\r\n" +
+                      String("id_cliente:")   + Id_cliente      +
+                      String("hora:")         + Hora           +
+                      String("razon:")        + Razon         +
+                      "Connection: open\r\n\r\n");
+                      
+          unsigned long timeout = millis();
+          while (client.available() == 0) {
+              if (millis() - timeout > 5000) {
+                  Serial.println(">>> Client Timeout !");
+                  client.stop();
+                  return 0;
+              }
+          }
+          String response;
+            // Read all the lines of the reply from server and print them to Serial
+          while(client.available()) {
+              response = client.readStringUntil('\r');
+              Serial.print(response);
+              //Aqui asignar los valores que vienen en el json a las variables globales
+              }; 
+            Serial.print(" \n");
+            Serial.print("Alarma informada correctamente. \n");
+            return 1;
+};
 int reportar_datos(){
 
         while (WiFi.status() != WL_CONNECTED) {
@@ -477,21 +496,21 @@ int reportar_datos(){
           Serial.println("connection failed on HTTPPort");
           return 0;
         }
-        String url = "http://192.168.0.16:8000/alarma/1";
+        String url = "http://192.168.0.16:8000/esp/1";
   
         Serial.print("Requesting URL: ");
         Serial.println(url);
-        // This will send the POST request to the server
-        client.print(String("POST ") + url + " HTTP/1.1\r\n" +
-                       "Host: " + host + "\r\n" +
-                       "Connection: open\r\n\r\n");
-        client.print( String("esp_sol:")          + Esp_sol      +
+        // This will send the PUT request to the server
+        client.print(String("PUT ") + url + " HTTP/1.1\r\n" +
+                     "Host: " + host + "\r\n" +
+                      String("esp_sol:")          + Esp_sol      +
                       String("esp_terrario:")     + Esp_terrario +
                       String("esp_humedad:")      + Esp_humedad  +
                       String("esp_placatermica:") + Esp_placatermica +
                       String("esp_focotermico:")  + Esp_focotermico  +
                       String("esp_catarata:")     + Esp_catarata  +
-                      String("esp_uv:")           + Esp_uv );
+                      String("esp_uv:")           + Esp_uv +
+                      "Connection: open\r\n\r\n");
                       
           unsigned long timeout = millis();
           while (client.available() == 0) {
@@ -513,6 +532,64 @@ int reportar_datos(){
             Serial.println(" esta respuesta pertenece al POST \n  \n");
             return 1;
   };
+
+
+
+void actualizar_esp32(){
+     
+      String jsonmensaje;
+      int i_line =1;
+      int i_json =0;
+      while(i_line < line.length()){ //escapar los "
+            if(line[i_line] == '"'){
+                  jsonmensaje+=(char)92;
+                  i_json++;
+                  jsonmensaje+= line[i_line];
+                  i_json++;
+            }else{
+                  jsonmensaje+= line[i_line];
+                  i_json++;
+            }
+            i_line++;
+      }
+      //Serial.println(jsonmensaje);
+      Serial.print("En Funcion ActualizarEsp. \n");
+      Serial.print("Aqui falta pasar el mensaje correcto formado con las variables. \n");
+      String jsonmensaje2 = "{\"sol_max\":\"40\",\"sol_min\":\"20\",\"temp_max\":\"30\",\"temp_min\":\"20\",\"humedad_min\":\"35\",\"uv_inicio\":\"8\",\"uv_tiempo\":\"22\",\"catarata_on\":\"1\",\"catarata_off\":\"3\",\"uv\":\"1\",\"focotermico\":\"1\",\"placatermica\":\"0\",\"catarata\":\"0\",\"auto_sol\":\"1\",\"auto_terrario\":\"1\",\"auto_humedad\":\"1\",\"auto_luz\":\"1\"}";
+      //Serial.print(jsonmensaje2);
+      DynamicJsonBuffer jsonBuffer;
+      JsonObject& parsed = jsonBuffer.parseObject(jsonmensaje2); //Parse message
+      if(!parsed.success()){
+          Serial.print("Falló parseObject()");
+      }else{
+      Sol_max       = parsed["sol_max"].as<String>();      
+      Sol_min       = parsed["sol_min"].as<String>();      
+      Temp_max      = parsed["temp_max"].as<String>();    
+      Temp_min      = parsed["temp_min "].as<String>();   
+      Humedad_min   = parsed["humedad_min"].as<String>();
+      Uv_inicio     = parsed["uv_inicio"].as<String>();
+      Uv_tiempo     = parsed["uv_tiempo"].as<String>();
+      Catarata_on   = parsed["catarata_on"].as<String>();
+      Catarata_off  = parsed["catarata_off"].as<String>();
+      Uv            = parsed["uv"].as<int>();
+      FocoTermico   = parsed["focoTermico "].as<int>();
+      PlacaTermica  = parsed["placaTermica"].as<int>();
+      Catarata      = parsed["catarata"].as<int>();
+      Auto_sol      = parsed["auto_sol"].as<int>();
+      Auto_terrario = parsed["auto_terrario"].as<int>();
+      Auto_humedad  = parsed["auto_humedad"].as<int>();
+      Auto_luz      = parsed["auto_luz"].as<int>();
+      Serial.print("El JSON a sido analizado por parseObject()  \n");
+      }
+      Serial.print("ejemplo de lectura: Auto_luz es : ");
+      Serial.print(Auto_luz);
+      Serial.print( "\n");
+      //cambiar el estado de los toma corriente
+      gestionar_enchufes(valorplaca, valorbombillo, valorcascada, valoruv); 
+      actualizacion = 0;    //retornar actualizacion para reviar si paso bien
+      Serial.print("No toma valores recibidos::::  Saliendo de Actualización de ESP·  \n   \n   \n"); 
+}     
+
 
 
 void setup(){
@@ -554,36 +631,47 @@ void setup(){
 }
  
 void loop(){
-  
-     // printLocalTime();
-    
+      Serial.print(" \n \n \n");
+      Serial.print("Begin****************************************** \n");
+      printLocalTime();
       ++value;
-      
-     // delay(1000); 
-      
-     // leer_temp();
-      delay(2000);
-      
-     // leer_hum();       
-      delay(2000);
+      leer_temp();
+      delay(1000);
 
-      Serial.print("connecting to API on: ");
-      Serial.println(host);
-       actualizacion = obtener_datos(puerto_tcp_http);
-       delay(2000);
-   
-      if(actualizacion == 0){
-        //NO actualizar;
-        Serial.print(" vale cero --> conservar estado");
-        };
-      if(actualizacion != 0){
-        Serial.println("Cambiar estado de enchufes");
-        actualizar_esp32();
-        };
-         //este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
-        // ESP.restart();
+      leer_hum();       
+      delay(1000);
+      
+      Serial.print( " \n \n");
+      Serial.print("Obtener datos (paso1 get).  \n");
+      Serial.print( "Al encender debe actualizar. estado actualizacion necesaria (0=no, 1=si). \n");
+      Serial.print("Pedir datos: \n");
+      //debe llegar un valor que indica si es necesario actualizar.
+      // .   No esta llegando
+       actualizacion = obtener_datos(); //asigna Line (json resibido)
+       Serial.print(" \n \n");
+       Serial.print( "Revision por Actualización (0=no, 1=si). \n");
+       Serial.print("Actualizacion Requerida = ");
+       Serial.print(actualizacion);
+       Serial.print(" \n \n");
+       delay(1000);
+       
+       Serial.print("Inicio  revision de actualizacion:  \n  (dos)   \n"); 
+       if(!actualizacion){
+        Serial.print(" Valor es cero --> conservar estado. \n");
+        }else{
+              Serial.println("Valor es 1 cambiar estado de artefactos");
+              Serial.print("Actualizar ESP32 (paso2 ).   \n \n");
+              actualizar_esp32();
+              };
+
+
+        Serial.print("Iniciando a reportar datos desde la ESP·\n   (paso 3) \n");     
         int reportado = reportar_datos();
         Serial.print(" Los valores se han enviado (0=no, 10=si) : " );
         Serial.print(reportado);
         Serial.print(" \n \n");
+        Serial.print("End*********************************************** \n \n");   
+        //este chip falla ocasionalmente, buscar forma de reiniciar el sistema. eso soluciona mucho.
+        // ESP.restart();     
+        
 }
